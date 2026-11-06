@@ -545,7 +545,9 @@ int main() {
         const Stats adopted = Compare(as_vector(direct->Logits()),
                                       as_vector(ahead->Logits()), vocab);
         Require(adopted.top1 == 1 && adopted.mean_kl < limits.decode,
-                "lookahead stop " + std::to_string(stop) + " diverges");
+                "lookahead stop " + std::to_string(stop) +
+                    " diverges: mean KL " + std::to_string(adopted.mean_kl) +
+                    ", top-1 " + std::to_string(adopted.top1));
         const auto logits = as_vector(direct->Logits());
         const auto next = static_cast<g4::TokenId>(
             std::max_element(logits.begin(), logits.end()) - logits.begin());

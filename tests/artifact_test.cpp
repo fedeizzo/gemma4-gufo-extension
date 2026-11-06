@@ -42,14 +42,26 @@ std::string IdsSha256(const std::vector<g4::TokenId>& ids) {
 void CheckTarget(const gufo::core::GgufReader& reader,
                  const g4::ModelWeights& w) {
   const auto& c = w.config;
-  Require(c.num_layers == 60 && c.hidden_size == 5376 && c.ffn_size == 21504,
-          "31B dimensions");
-  Require(c.num_heads == 32 && c.GlobalLayerCount() == 10, "attention layout");
+  const bool experts = c.HasExperts();
+  if (experts) {
+    Require(c.num_layers == 30 && c.hidden_size == 2816 && c.ffn_size == 2112,
+            "26B-A4B dimensions");
+    Require(c.num_experts == 128 && c.expert_ffn_size == 704,
+            "26B-A4B experts");
+  } else {
+    Require(c.num_layers == 60 && c.hidden_size == 5376 && c.ffn_size == 21504,
+            "31B dimensions");
+  }
+  Require(c.num_heads == (experts ? 16U : 32U) &&
+              c.GlobalLayerCount() == (experts ? 5U : 10U),
+          "attention layout");
   for (std::uint32_t l = 0; l < c.num_layers; ++l) {
     const bool global = (l + 1) % 6 == 0;
     Require(c.IsSliding(l) != global,
             "sliding pattern at layer " + std::to_string(l));
-    Require(c.kv_heads[l] == (global ? 4U : 16U), "KV heads");
+    Require(
+        c.kv_heads[l] == (experts ? (global ? 2U : 8U) : (global ? 4U : 16U)),
+        "KV heads");
     Require(w.layers[l].attn_v.empty() == global, "K=V on global layers");
   }
   Require(c.head_dim_global == 512 && c.head_dim_sliding == 256 &&
@@ -69,7 +81,10 @@ void CheckTarget(const gufo::core::GgufReader& reader,
 
 void CheckTokenizer(const g4::Tokenizer& tokenizer) {
   Require(tokenizer.VocabSize() == 262144, "vocabulary size");
-  Require(tokenizer.BosToken() == 2 && tokenizer.EosToken() == 106,
+  // Unsloth stores <turn|> as EOS; the QAT files store <eos>, with <turn|> as
+  // EOT. Both end generation, which the set below checks.
+  Require(tokenizer.BosToken() == 2 &&
+              (tokenizer.EosToken() == 106 || tokenizer.EosToken() == 1),
           "BOS/EOS ids");
   const std::vector<g4::TokenId> eog(tokenizer.EndOfGenerationTokens().begin(),
                                      tokenizer.EndOfGenerationTokens().end());
@@ -138,11 +153,12 @@ void CheckDraft(const std::string& path, const g4::ModelWeights& target) {
   const auto d = g4::DraftWeights::Bind(*reader, target, &error);
   Require(d.has_value(), "drafter rejected: " + error);
   Require(d->config.num_layers == 4 && d->config.hidden_size == 1024 &&
-              d->config.target_hidden_size == 5376,
+              d->config.target_hidden_size == target.config.hidden_size,
           "drafter dimensions");
-  Require(d->config.SharedKvSource(0, target.config) == 58 &&
-              d->config.SharedKvSource(3, target.config) == 59,
-          "drafter reads target layers 58 (sliding) and 59 (global)");
+  const std::uint32_t last = target.config.num_layers - 1;
+  Require(d->config.SharedKvSource(0, target.config) == last - 1 &&
+              d->config.SharedKvSource(3, target.config) == last,
+          "drafter reads the last sliding and global target layers");
 }
 
 }  // namespace

@@ -148,6 +148,9 @@ gufo_extension_target(
 
 if(TARGET gufo_gemma4_reference)
   target_compile_options(gufo_gemma4_reference PRIVATE -O2)
+  # Without OpenMP its parallel loops silently run on one thread.
+  find_package(OpenMP REQUIRED)
+  target_link_libraries(gufo_gemma4_reference PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # Tests. Host contracts need no model; model-backed checks read the GGUF named
