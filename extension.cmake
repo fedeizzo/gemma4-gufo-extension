@@ -63,7 +63,6 @@ if(TARGET gufo_gemma4_hip)
     -Wno-unused-command-line-argument)
   gufo_extension_hip_sources(gufo_gemma4_hip
     SOURCES
-      hip/attention_wmma.hip.cpp
       hip/candidates.hip.cpp
       hip/kernels.hip.cpp
       hip/moe_prefill.hip.cpp
@@ -73,9 +72,12 @@ if(TARGET gufo_gemma4_hip)
   )
   # Projections must round identically at every width (verification rows
   # equal single-token decode bit for bit), so they keep strict
-  # floating-point semantics.
+  # floating-point semantics. So does prefill attention: under Clang 24, fast
+  # math makes a row's result depend on the rest of its forward, and a prefix
+  # evaluated with a lookahead then differs from the same prefix on its own.
   gufo_extension_hip_sources(gufo_gemma4_hip
     SOURCES
+      hip/attention_wmma.hip.cpp
       hip/gemv.hip.cpp
       hip/moe.hip.cpp
       hip/wmma_gemv.hip.cpp
