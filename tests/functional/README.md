@@ -19,13 +19,12 @@ nix develop $G -c python3 tests/functional/run.py --host $G -- \
   --expected-input-modalities text,image --suite tools --suite cache -- \
   $G/build/gemma-ext-release/gufo serve llm \
   --model $M/gemma-31b-it/gemma-4-31B-it-UD-Q4_K_XL.gguf \
-  --mmproj $M/gemma-31b-it/mmproj-BF16.gguf --sessions 2 \
-  --speculative mtp --draft-tokens 15 \
+  --mmproj $M/gemma-31b-it/mmproj-BF16.gguf --sessions 2 --context 32768 \
+  --speculative mtp \
   --mtp-model $M/drafts/31b-unsloth-mtp/MTP/mtp-gemma-4-31B-it-Q8_0.gguf
 ```
 
-Pass `--draft-tokens 15` explicitly: the host cannot tell Gemma whether it was
-given, and its own default is 7.
+Pass `--context 32768`: the default 8192 is too small for the cache suites.
 
 ## What the patch adds
 

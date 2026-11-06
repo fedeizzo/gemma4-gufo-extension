@@ -39,10 +39,10 @@ Still missing:
   three checkpoints. Only 31B `UD-Q4_K_XL` has run so far, as a smoke test.
 - **Cache features not upstream:** in-place same-slot restore and shared
   transfer streams (batches of 256 jobs instead of 16).
-- **Known failures:** `reasoning-budget` (budgets are ignored; the runner
-  declares no single-token budget tags) and `tool-images` (with thinking off,
-  the model's empty `thought\n<channel|>` after a tool response reaches the
-  content). Both also fail on `feat/gemma`.
+- **Known failures:** `reasoning-budget`: budgets are ignored, because the
+  host counts `thought\n` against the budget and a low budget would leak
+  markup, so it needs a host change. `image-detail` assumes Qwen's image token
+  counts, and on 26B `image-count` thinks past that test's 256-token limit.
 - **Model cards and documentation** (benchmarks, quality, experiments) still
   live in `feat/gemma`; the Python tools in `tools/` are untested here.
 
