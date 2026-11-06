@@ -12,39 +12,56 @@ batched sessions, native tool calls and the shared serving cache.
 
 Maintainer: Francesco Moca ([@franzmoca](https://github.com/franzmoca)).
 
-## Status: work in progress
+Report bugs and regressions in the
+[issues of this repository](https://github.com/franzmoca/gemma4-gufo-extension/issues),
+with the GGUF file name when a model does not load.
 
-The engine is moving here from the
-[franzmoca/gufo](https://github.com/franzmoca/gufo) `feat/gemma` branch
-([gufo-org/gufo#426](https://github.com/gufo-org/gufo/pull/426)). Until the
-port is validated, use `feat/gemma` for real workloads.
+## Features
 
-Working today, on Gemma 4 31B `UD-Q4_K_XL` with the MTP drafter:
-
-- `gufo serve llm`: chat, reasoning (`reasoning_content` and
+- `gufo serve llm`: every text endpoint, reasoning (`reasoning_content` and
   `reasoning_tokens`), native tool calls (buffered and streamed), image input,
-  and prompt-cache reuse.
+  batched sessions, and RAM and disk prompt caching.
 - `gufo prompt` and `gufo bench` through the extension's drivers.
 - Provider options: `--image-tokens`, `--draft-calibration`, `--draft-trace` and
   `--prefill-weights`. MTP drafts up to 15 tokens with the calibrated policy
   unless `--draft-tokens` or `--draft-policy` say otherwise.
-- Unit tests: configuration, tokenizer, chat template, tool syntax and the
-  text contracts without models; kernels, target parity, continuation and
-  vision with models.
 
-Still missing:
+Benchmarks and quality reports are in the model cards:
+[26B-A4B](docs/models/gemma-4-26b-a4b/README.md),
+[31B](docs/models/gemma-4-31b/README.md) and
+[31B QAT](docs/models/gemma-4-31b-qat/README.md).
 
-- **Parity validation** against `feat/gemma`: greedy outputs, decode KL,
-  functional suites (including cache and long context) and speed for all
-  three checkpoints. Only 31B `UD-Q4_K_XL` has run so far, as a smoke test.
-- **Cache features not upstream:** in-place same-slot restore and shared
-  transfer streams (batches of 256 jobs instead of 16).
-- **Known failures:** `reasoning-budget`: budgets are ignored, because the
-  host counts `thought\n` against the budget and a low budget would leak
-  markup, so it needs a host change. `image-detail` assumes Qwen's image token
-  counts, and on 26B `image-count` thinks past that test's 256-token limit.
-- **Model cards and documentation** (benchmarks, quality, experiments) still
-  live in `feat/gemma`; the Python tools in `tools/` are untested here.
+## Validation
+
+Compared with the `feat/gemma` engine on November 6, 2026, over HTTP with the
+cards' benchmark tool, in balanced order, on Strix Halo at the
+accelerator-performance profile. Single-user greedy MTP, UD-Q4_K_XL, pp2048 and
+tg128, mixed and repetitive text, depths 0 and 8,192:
+
+| Model | Prefill | Decode |
+| --- | ---: | ---: |
+| 31B | -0.3% to -0.5% | -0.1% to +0.3% |
+| 26B-A4B | -2.1% to +2.1%, noisy | -1.2% to +2.2% |
+
+Sampled MTP at depth 0 against the cards: 26B-A4B prefill 4,010 (card 3,898),
+decode 71.8 (card 73.8 ± 2.7); 31B prefill 565 (card 561), decode 25.5 (card
+22.3). The target tests pass on 31B and 26B-A4B, the Pi coding-agent replay
+passes 36 of 36 on 26B-A4B, and the tool, image, cache and long-context
+functional suites pass on both, apart from `image-count` below.
+
+Not repeated on this build: QAT, and the complete functional set.
+
+## Known limits
+
+- `reasoning_budget_tokens` is ignored: the host counts Gemma's `thought\n`
+  against the budget, so a low budget would leak markup. This needs a host
+  change.
+- The functional suites `image-detail` (it assumes Qwen's image token counts)
+  and `image-count` on 26B-A4B (thinking passes that test's 256-token limit)
+  fail for those test reasons.
+- In-place same-slot restore and shared transfer streams (batches of 256 jobs
+  instead of 16) are not upstream.
+- The Python tools in `tools/` are untested here.
 
 ## Build with Gufo
 
