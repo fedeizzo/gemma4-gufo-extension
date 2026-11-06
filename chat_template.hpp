@@ -18,6 +18,11 @@ struct ChatOptions {
   /// Gemma 4 thinking is opt-in: the template default is off.
   bool enable_thinking{false};
   bool preserve_thinking{false};
+  /// Serving only; the official template adds nothing here. With thinking off
+  /// and a tool response last, close an empty thought block in the generation
+  /// prompt: after an image result the model otherwise writes the block
+  /// without its opening token, and it reaches the reply as text.
+  bool close_thought_after_tool{false};
 };
 
 /// Resolves provider-neutral controls against the Gemma 4 template defaults.

@@ -630,6 +630,7 @@ ChatOptions ResolveChatOptions(const ReasoningOptions& reasoning) {
     options.enable_thinking = *reasoning.effort != ReasoningEffort::kMinimal;
   }
   options.preserve_thinking = reasoning.preserve_thinking.value_or(false);
+  options.close_thought_after_tool = true;
   return options;
 }
 
@@ -895,9 +896,12 @@ std::optional<RenderedPrompt> ChatTemplate::Render(
       if (!options.enable_thinking) {
         out += std::string(kThoughtStart) + std::string(kThoughtEnd);
       }
-    } else if (prev_type == MessageType::kToolResponse &&
-               options.enable_thinking) {
-      out += kThoughtStart;
+    } else if (prev_type == MessageType::kToolResponse) {
+      if (options.enable_thinking) {
+        out += kThoughtStart;
+      } else if (options.close_thought_after_tool) {
+        out += std::string(kThoughtStart) + std::string(kThoughtEnd);
+      }
     }
   }
   rendered.text = std::move(out);

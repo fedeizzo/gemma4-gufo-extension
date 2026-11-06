@@ -378,7 +378,7 @@ public:
       const ext::ChatRequest& request) const override {
     const auto options = Options(request);
     if (!options.enable_thinking) {
-      // Gemma 4 still opens an empty thought channel after tool responses.
+      // The prompt closes the thought channel; a repeated block still parses.
       return ext::InitialOutputState::kAuto;
     }
     // After a tool response the prompt already opened the thought channel.

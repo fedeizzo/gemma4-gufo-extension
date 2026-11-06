@@ -218,6 +218,35 @@ void CheckFramingSuffix() {
 /// Agent clients may end each request with user context that the next
 /// request replaces. The stable boundary then precedes that turn, so it
 /// prefixes the next request; ordinary chat keeps it at the generation prompt.
+/// Serving closes the thought block after a tool response when thinking is
+/// off; the default rendering stays the official template's.
+void CheckClosedThoughtAfterTool() {
+  using gufo::ext::ChatMessage;
+  using gufo::ext::ChatRole;
+  ChatMessage call(ChatRole::kAssistant, "");
+  call.tool_calls.push_back(
+      {.id = "c", .name = "read", .arguments = {{"path", "a.py", true}}});
+  ChatMessage result(ChatRole::kTool, "x = 1");
+  result.tool_call_id = "c";
+  const std::vector<ChatMessage> history{
+      ChatMessage(ChatRole::kUser, "Start the task."), call, result};
+  const auto suffix = [&](const g4::ChatOptions& options) {
+    std::string error;
+    const auto rendered =
+        g4::ChatTemplate::Render(history, {}, options, &error);
+    Require(rendered.has_value(), "conversation rendered: " + error);
+    return rendered->text.substr(rendered->generation_prompt_offset);
+  };
+  gufo::ReasoningOptions reasoning;
+  const auto served = g4::ResolveChatOptions(reasoning);
+  Require(suffix({}).empty(), "the official template adds nothing");
+  Require(suffix(served) == "<|channel>thought\n<channel|>",
+          "serving closes the thought block");
+  reasoning.enabled = true;
+  Require(suffix(g4::ResolveChatOptions(reasoning)) == "<|channel>thought\n",
+          "thinking opens the thought block");
+}
+
 void CheckReplacedFinalUserTurn() {
   using gufo::ext::ChatMessage;
   using gufo::ext::ChatRole;
@@ -301,6 +330,7 @@ int main() {
     CheckShownConstants();
     CheckReplayedThought();
     CheckFramingSuffix();
+    CheckClosedThoughtAfterTool();
     CheckReplacedFinalUserTurn();
   });
 }
