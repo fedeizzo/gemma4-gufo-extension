@@ -121,6 +121,14 @@ public:
     }
   }
   [[nodiscard]] const vision::Prompt* images() const { return images_.get(); }
+  /// The current request's reasoning budget, widened by the thought header.
+  [[nodiscard]] const std::shared_ptr<const sampling::ReasoningBudget>&
+  thought_budget() const {
+    return thought_budget_;
+  }
+  void SetThoughtBudget(std::shared_ptr<const sampling::ReasoningBudget> b) {
+    thought_budget_ = std::move(b);
+  }
   const float* Embedding(vision::Encoder& encoder, std::size_t index) {
     auto& embedding = embeddings_[index];
     if (!embedding) {
@@ -134,6 +142,7 @@ private:
   cache::Adapter* adapter_{};
   cache::Slot* slot_{};
   std::shared_ptr<const vision::Prompt> images_;
+  std::shared_ptr<const sampling::ReasoningBudget> thought_budget_;
   std::map<std::size_t, std::shared_ptr<const vision::Encoder::Embedding>>
       embeddings_;
 };
@@ -185,6 +194,12 @@ public:
                << "draft_max_tokens=" << model_->DraftTokens() << '\n';
       const auto canonical = identity.str();
       component_identity_.assign(canonical.begin(), canonical.end());
+    }
+    // The tokens of `thought\n` after the channel opener.
+    const auto open = model_->Tokenize(kThoughtStart);
+    const auto channel = model_->Tokenize(kChannelOpen);
+    if (channel.size() == 1 && open.size() > 1 && open.front() == channel[0]) {
+      thought_header_ = open.size() - 1;
     }
   }
 
@@ -288,6 +303,14 @@ public:
   }
   [[nodiscard]] ReasoningMarkup ReasoningDelimiters() const override {
     return gemma4::ReasoningDelimiters();
+  }
+  // The budget opens on the channel token; without a header length the
+  // budget would cut the header, so Gemma then declares none.
+  [[nodiscard]] ReasoningTags ReasoningBudgetTags() const override {
+    if (thought_header_ == 0) {
+      return {};
+    }
+    return {kChannelOpen, kThoughtEnd, {kThoughtEnd}};
   }
   [[nodiscard]] std::uint32_t VocabularySize() const override {
     return model_->VocabSize();
@@ -493,6 +516,7 @@ public:
   [[nodiscard]] ext::TextDecodeSelection SelectNext(
       ext::TextRunnerState& state,
       sampling::SamplerState& sampler) const override {
+    CoverThoughtHeader(Get(state), sampler);
     auto& session = Get(state).session();
     if (session.Position() >= max_context_) {
       return {.stop = true, .piece = {}};
@@ -533,6 +557,7 @@ public:
   [[nodiscard]] ext::TextDecodeStep DecodeStep(
       ext::TextRunnerState& state, std::size_t max_tokens,
       sampling::SamplerState& sampler) const override {
+    CoverThoughtHeader(Get(state), sampler);
     auto& session = Get(state).session();
     // Select-and-advance samples Logits(), which only predicts the next
     // token while no emitted token is pending.
@@ -596,6 +621,7 @@ public:
     std::vector<std::size_t> index;
     for (std::size_t i = 0; i < decodes.size(); ++i) {
       auto& state = Get(decodes[i].state.get());
+      CoverThoughtHeader(state, decodes[i].sampler.get());
       auto& session = state.session();
       if (decodes[i].max_tokens == 1 && !session.HasPendingToken()) {
         // A one-token step evaluates its token, as DecodeStep does.
@@ -783,11 +809,32 @@ private:
         after.copied_accepted - before.copied_accepted;
   }
 
+  // The host starts a reasoning budget after the channel opener, so Gemma's
+  // `thought\n` header would count against it, and a budget spent inside the
+  // header would leave unparsable markup. A request's first step widens its
+  // budget by the header; the sampler has accepted no output yet, so a fresh
+  // state from the same config and history differs only in that budget.
+  void CoverThoughtHeader(State& state, sampling::SamplerState& sampler) const {
+    const auto& budget = sampler.config().reasoning_budget;
+    if (!budget || budget == state.thought_budget()) {
+      return;
+    }
+    auto widened = std::make_shared<sampling::ReasoningBudget>(*budget);
+    widened->tokens += thought_header_;
+    auto config = sampler.config();
+    config.reasoning_budget = widened;
+    sampling::SamplerState fresh(std::move(config), sampler.history());
+    fresh.CopyDrawStateFrom(sampler);
+    sampler = std::move(fresh);
+    state.SetThoughtBudget(std::move(widened));
+  }
+
   std::shared_ptr<Model> model_;
   std::shared_ptr<vision::Encoder> vision_;
   std::uint32_t image_tokens_;
   std::uint32_t max_context_;
   cache::Identity component_identity_;
+  std::size_t thought_header_{0};
 };
 
 std::string Fingerprint(const ext::TextRunnerOptions& options,

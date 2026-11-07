@@ -18,9 +18,9 @@ with the GGUF file name when a model does not load.
 
 ## Features
 
-- `gufo serve llm`: every text endpoint, reasoning (`reasoning_content` and
-  `reasoning_tokens`), native tool calls (buffered and streamed), image input,
-  batched sessions, and RAM and disk prompt caching.
+- `gufo serve llm`: every text endpoint, reasoning (`reasoning_content`,
+  `reasoning_tokens` and reasoning budgets), native tool calls (buffered and
+  streamed), image input, batched sessions, and RAM and disk prompt caching.
 - `gufo prompt` and `gufo bench` through the extension's drivers.
 - Provider options: `--image-tokens`, `--draft-calibration`, `--draft-trace` and
   `--prefill-weights`. MTP drafts up to 15 tokens with the calibrated policy
@@ -53,9 +53,6 @@ Not repeated on this build: QAT, and the complete functional set.
 
 ## Known limits
 
-- `reasoning_budget_tokens` is ignored: the host counts Gemma's `thought\n`
-  against the budget, so a low budget would leak markup. This needs a host
-  change.
 - The functional suites `image-detail` (it assumes Qwen's image token counts)
   and `image-count` on 26B-A4B (thinking passes that test's 256-token limit)
   fail for those test reasons.

@@ -77,6 +77,7 @@ public:
 };
 
 /// Reasoning channel markup produced by the model.
+inline constexpr std::string_view kChannelOpen = "<|channel>";
 inline constexpr std::string_view kThoughtStart = "<|channel>thought\n";
 inline constexpr std::string_view kThoughtEnd = "<channel|>";
 inline constexpr std::string_view kToolCallStart = "<|tool_call>";
