@@ -213,8 +213,7 @@ std::shared_ptr<Model> Model::Load(const std::string& model_path,
                                    std::string* error_msg) {
   std::shared_ptr<Model> m(new Model());
   m->options_ = options;
-  if (options.max_context == 0 || options.prefill_chunk == 0 ||
-      options.max_logit_rows == 0) {
+  if (options.prefill_chunk == 0 || options.max_logit_rows == 0) {
     Fail(error_msg, "gemma4 model options must be positive");
     return nullptr;
   }
@@ -240,6 +239,14 @@ std::shared_ptr<Model> Model::Load(const std::string& model_path,
     return nullptr;
   }
   m->weights_ = std::make_unique<ModelWeights>(std::move(*weights));
+  // 0 asks for the model's native context, as `gufo serve --context 0`.
+  if (m->options_.max_context == 0) {
+    m->options_.max_context = m->weights_->config.context_length;
+  }
+  if (m->options_.max_context == 0) {
+    Fail(error_msg, "gemma4 GGUF has no native context length; pass --context");
+    return nullptr;
+  }
   if (options.max_context > m->weights_->config.context_length) {
     Fail(error_msg, "requested context exceeds the model's native " +
                         std::to_string(m->weights_->config.context_length));
@@ -306,7 +313,7 @@ std::shared_ptr<Model> Model::Load(const std::string& model_path,
     // chunk (Session::Extend).
     m->executor_ = std::make_unique<rocm::Executor>(
         *m->device_, options.prefill_chunk + rocm::kSplitRows,
-        options.max_logit_rows, options.max_context);
+        options.max_logit_rows, m->options_.max_context);
   } catch (const std::exception& e) {
     Fail(error_msg, e.what());
     return nullptr;
