@@ -65,14 +65,11 @@ Not repeated on this build: QAT, and the complete functional set.
 
 ## Build with Gufo
 
-The extension needs extension API 0.2.9. Until the two pull requests for
-provider options ([#979](https://github.com/gufo-org/gufo/issues/979)) and
-speculation defaults merge upstream, build it on the `gemma-main` branch of
-[franzmoca/gufo](https://github.com/franzmoca/gufo): upstream `main` plus those
-two changes.
+The extension needs extension API 0.2.14 (upstream `main` since
+[#1047](https://github.com/gufo-org/gufo/pull/1047)).
 
 ```sh
-git clone -b gemma-main https://github.com/franzmoca/gufo
+git clone https://github.com/gufo-org/gufo
 cd gufo
 cmake --preset release -DGUFO_EXTENSION_DIRS=/path/to/gemma4-gufo-extension
 cmake --build --preset release --parallel 4
